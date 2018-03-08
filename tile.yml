@@ -1,0 +1,59 @@
+---
+name: bosh-hm-forwarder
+icon_file: resources/images/nr-128x128.png
+label: HM Forwarder
+description: Send BOSH VM Health metrics to the Firehose
+packages:
+- name: metron-loggregator
+  type: bosh-release
+  path: https://bosh.io/d/github.com/cloudfoundry/loggregator
+  # ?v=89
+- name: bosh-hm-forwarder
+  type: bosh-release
+  path: https://bosh.io/d/github.com/cloudfoundry/bosh-hm-forwarder-release
+- name: consul-release
+  type: bosh-release
+  path: https://bosh.io/d/github.com/cloudfoundry-incubator/consul-release
+
+  jobs:
+  - name: hm-forwarder
+    templates:
+    - name: boshhmforwarder
+      release: bosh-hm-forwarder
+    - name: metron_agent
+      release: loggregator
+    - name: consul_agent
+      release: consul
+      consumes: |
+        consul: nil
+        consul_common: {from: consul_common_link, deployment: (( ..cf.deployment_name ))}
+        consul_client: {from: consul_client_link, deployment: (( ..cf.deployment_name ))}
+        consul_server: {from: consul_server_link, deployment: (( ..cf.deployment_name ))}
+    memory: 4096
+    ephemeral_disk: 8192
+    cpu: 2
+    static_ip: 1
+    dynamic_ip: 0
+    single_az_only: true
+    instance_definition:
+      configurable: false
+      default: 1
+    properties:
+      boshhmforwarder:
+        incoming_port: 13321
+      loggregator_endpoint:
+        shared_secret: (( ..cf.doppler.shared_secret_credentials.password ))
+      metron_endpoint:
+        shared_secret: (( ..cf.doppler.shared_secret_credentials.password ))
+      metron_agent:
+        deployment: cf
+      loggregator:
+        tls:
+          ca_cert: (( $ops_manager.ca_certificate ))
+          metron:
+            cert: (( ..cf.doppler.metron_tls_cert.cert_pem ))
+            key: (( ..cf.doppler.metron_tls_cert.private_key_pem ))
+
+stemcell_criteria:
+  os: 'ubuntu-trusty'
+  version: '3445'
